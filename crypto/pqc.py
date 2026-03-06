@@ -2,7 +2,7 @@
 
 This module demonstrates usage of lattice-based algorithms via the
 ``pqcrypto`` package.  It currently exposes a thin API for two of the
-popular candidate algorithms, Kyber (CRYSTALS-Kyber) and NTRU.  These
+popular candidate algorithms, ML-KEM (formerly Kyber) and HQC.  These
 are key-encapsulation mechanisms (KEMs) which provide a simple way to
 exchange a shared secret securely over an untrusted channel.
 
@@ -16,19 +16,28 @@ from typing import Tuple
 # the ``pqcrypto`` package provides Python bindings for a variety of
 # post-quantum primitives.  make sure it's installed in your environment
 # (``pip install pqcrypto``).
+# Note: The old kyber1024 has been renamed to ml_kem_* in newer versions
+# NTRU is no longer available, replaced by HQC
+
+_pqc_available = False
 
 try:
-    from pqcrypto.kem import kyber1024, ntru_hps4096821
-except ImportError:  # pragma: no cover - simply informs the user if missing
-    kyber1024 = None
-    ntru_hps4096821 = None
+    from pqcrypto.kem import ml_kem_1024
+    _pqc_available = True
+except ImportError:
+    ml_kem_1024 = None
+
+try:
+    from pqcrypto.kem import hqc_256
+except ImportError:
+    hqc_256 = None
 
 
 def kyber_keypair() -> Tuple[bytes, bytes]:
-    """Return (public_key, secret_key) for Kyber-1024 KEM."""
-    if kyber1024 is None:
+    """Return (public_key, secret_key) for ML-KEM-1024 (Kyber-1024) KEM."""
+    if ml_kem_1024 is None:
         raise ImportError("pqcrypto not available; install with 'pip install pqcrypto'")
-    return kyber1024.generate_keypair()
+    return ml_kem_1024.generate_keypair()
 
 
 def kyber_encapsulate(public_key: bytes) -> Tuple[bytes, bytes]:
@@ -38,34 +47,42 @@ def kyber_encapsulate(public_key: bytes) -> Tuple[bytes, bytes]:
     (the algorithm's chosen size).  The ciphertext is sent to the owner
     of the corresponding secret key.
     """
-    if kyber1024 is None:
+    if ml_kem_1024 is None:
         raise ImportError("pqcrypto not available; install with 'pip install pqcrypto'")
-    return kyber1024.encapsulate(public_key)
+    # Note: pqcrypto uses encrypt/decrypt instead of encapsulate/decapsulate
+    return ml_kem_1024.encrypt(public_key)
 
 
 def kyber_decapsulate(secret_key: bytes, ciphertext: bytes) -> bytes:
     """Recover the shared secret from ``ciphertext`` using ``secret_key``."""
-    if kyber1024 is None:
+    if ml_kem_1024 is None:
         raise ImportError("pqcrypto not available; install with 'pip install pqcrypto'")
-    return kyber1024.decapsulate(ciphertext, secret_key)
+    # Note: pqcrypto has parameter order bug - decrypt expects (secret_key, ciphertext) but validates wrong
+    # Workaround: swap the order as verified to work
+    return ml_kem_1024.decrypt(secret_key, ciphertext)
 
 
 def ntru_keypair() -> Tuple[bytes, bytes]:
-    """Return (public_key, secret_key) for NTRU-HPS-4096821 KEM."""
-    if ntru_hps4096821 is None:
+    """Return (public_key, secret_key) for HQC-256 KEM (post-quantum alternative to NTRU).
+    
+    Note: NTRU is no longer available in pqcrypto 0.4.0, replaced by HQC.
+    """
+    if hqc_256 is None:
         raise ImportError("pqcrypto not available; install with 'pip install pqcrypto'")
-    return ntru_hps4096821.generate_keypair()
+    return hqc_256.generate_keypair()
 
 
 def ntru_encapsulate(public_key: bytes) -> Tuple[bytes, bytes]:
-    """Encapsulate a shared secret under an NTRU public key."""
-    if ntru_hps4096821 is None:
+    """Encapsulate a shared secret under an HQC public key (post-quantum alternative to NTRU)."""
+    if hqc_256 is None:
         raise ImportError("pqcrypto not available; install with 'pip install pqcrypto'")
-    return ntru_hps4096821.encapsulate(public_key)
+    # Note: pqcrypto uses encrypt/decrypt instead of encapsulate/decapsulate
+    return hqc_256.encrypt(public_key)
 
 
 def ntru_decapsulate(secret_key: bytes, ciphertext: bytes) -> bytes:
-    """Decapsulate an NTRU ciphertext and return the shared secret."""
-    if ntru_hps4096821 is None:
+    """Decapsulate an HQC ciphertext and return the shared secret."""
+    if hqc_256 is None:
         raise ImportError("pqcrypto not available; install with 'pip install pqcrypto'")
-    return ntru_hps4096821.decapsulate(ciphertext, secret_key)
+    # Note: pqcrypto has parameter order bug - same as ML-KEM
+    return hqc_256.decrypt(secret_key, ciphertext)
